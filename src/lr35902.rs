@@ -3,12 +3,19 @@ const SUBSTRACT_FLAG_BYTE_POSITION: u8 = 6;
 const HALF_CARRY_FLAG_BYTE_POSITION: u8 = 5;
 const CARRY_FLAG_BYTE_POSITION: u8 = 4;
 
-enum Instruction {
-    ADD(ArithmeticTarget),
-    SUB(ArithmeticTarget),
+#[derive(Debug)]
+pub struct CPU {
+    pub registers: Registers,
 }
 
-enum ArithmeticTarget {
+pub enum Instruction {
+    ADD(ArithmeticTarget),
+    SUB(ArithmeticTarget),
+    ADDHL(WordTarget),
+    ADC(ArithmeticTarget),
+}
+
+pub enum ArithmeticTarget {
     A,
     B,
     C,
@@ -18,17 +25,26 @@ enum ArithmeticTarget {
     L,
 }
 
-struct Registers {
-    a: u8,
-    b: u8,
+enum WordTarget {
+    AF,
+    BC,
+    HL,
+    DE,
+}
+
+#[derive(Debug)]
+pub struct Registers {
+    pub a: u8,
+    pub b: u8,
     c: u8,
     d: u8,
     e: u8,
-    f: u8,
+    f: FlagsRegister,
     h: u8,
     l: u8,
 }
 
+#[derive(Debug, Clone, Copy)]
 struct FlagsRegister {
     zero: bool,
     subtract: bool,
@@ -36,7 +52,33 @@ struct FlagsRegister {
     carry: bool,
 }
 
+impl CPU {
+    pub fn new() -> Self {
+        Self {
+            registers: Registers::new(),
+        }
+    }
+}
+
 impl Registers {
+    fn new() -> Self {
+        Self {
+            a: 0,
+            b: 0,
+            c: 0,
+            d: 0,
+            e: 0,
+            f: FlagsRegister {
+                zero: false,
+                subtract: false,
+                half_carry: false,
+                carry: false,
+            },
+            h: 0,
+            l: 0,
+        }
+    }
+
     fn get_bc(&self) -> u16 {
         (self.b as u16) << 8 | self.c as u16
     }
@@ -47,14 +89,15 @@ impl Registers {
     }
 
     fn get_af(&self) -> u16 {
-        (self.a as u16) << 8 | self.f as u16
+        ((self.a as u16) << 8) | (u8::from(self.f) as u16)
     }
 
     fn set_af(&mut self, value: u16) {
-        self.a = ((value & 0xFF00) >> 8) as u8;
-        self.f = (value & 0xFF) as u8;
-    }
+        self.a = (value >> 8) as u8;
 
+        // IMPORTANT: lower nibble must always be 0
+        self.f = FlagsRegister::from((value & 0x00FF) as u8 & 0xF0);
+    }
     fn get_de(&self) -> u16 {
         (self.d as u16) << 8 | self.e as u16
     }
@@ -77,6 +120,15 @@ impl Registers {
             ArithmeticTarget::E => self.e,
             ArithmeticTarget::H => self.h,
             ArithmeticTarget::L => self.l,
+        }
+    }
+
+    fn get_word(&self, target: WordTarget) -> u16 {
+        match target {
+            WordTarget::BC => self.get_bc(),
+            WordTarget::HL => self.get_hl(),
+            WordTarget::DE => self.get_de(),
+            WordTarget::AF => self.get_af(),
         }
     }
 }
@@ -107,7 +159,7 @@ impl std::convert::From<u8> for FlagsRegister {
 }
 
 impl CPU {
-    fn execute(&mut self, instruction: Instruction) {
+    pub fn execute(&mut self, instruction: Instruction) {
         match instruction {
             Instruction::ADD(target) => {
                 let value = self.registers.get(target);
@@ -117,6 +169,14 @@ impl CPU {
                 let value = self.registers.get(target);
                 self.registers.a = self.sub(value);
             }
+            Instruction::ADDHL(target) => {
+                let value = self.registers.get_word(target);
+                self.add_hl(value);
+            }
+            Instruction::ADC(target) => {
+                let value = self.registers.get(target);
+                self.registers.a = self.addc(value);
+            }
         }
     }
 
@@ -125,8 +185,23 @@ impl CPU {
         self.registers.f.zero = new_value == 0;
         self.registers.f.subtract = false;
         self.registers.f.carry = did_overflow;
-        self.register.f.half_carry = (self.registers.a & 0xF) + (value & 0xF) > 0xF;
+        self.registers.f.half_carry = (self.registers.a & 0xF) + (value & 0xF) > 0xF;
         new_value
+    }
+
+    fn addc(&mut self, value: u8) -> u8 {
+        let a = self.registers.a;
+        let carry = self.registers.f.carry as u8;
+
+        let result16 = a as u16 + value as u16 + carry as u16;
+        let result = result16 as u8;
+
+        self.registers.f.zero = result == 0;
+        self.registers.f.subtract = false;
+        self.registers.f.carry = result16 > 0xFF;
+        self.registers.f.half_carry = ((a & 0xF) + (value & 0xF) + carry) > 0xF;
+
+        result
     }
 
     fn sub(&mut self, value: u8) -> u8 {
@@ -139,5 +214,12 @@ impl CPU {
         self.registers.f.half_carry = (a & 0xF) < (value & 0xF);
 
         result
+    }
+
+    fn add_hl(&mut self, value: u16) {
+        let hl = self.registers.get_hl();
+        let result = hl.wrapping_add(value);
+
+        self.registers.set_hl(result);
     }
 }
