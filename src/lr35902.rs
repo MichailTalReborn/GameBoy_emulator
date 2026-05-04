@@ -1,5 +1,3 @@
-use std::result;
-
 const ZERO_FLAG_BYTE_POSITION: u8 = 7;
 const SUBSTRACT_FLAG_BYTE_POSITION: u8 = 6;
 const HALF_CARRY_FLAG_BYTE_POSITION: u8 = 5;
@@ -20,8 +18,11 @@ pub enum Instruction {
     OR(ArithmeticTarget),
     XOR(ArithmeticTarget),
     CP(ArithmeticTarget),
+    INC(ArithmeticTarget),
+    DEC(ArithmeticTarget),
 }
 
+#[derive(Clone, Copy)]
 pub enum ArithmeticTarget {
     A,
     B,
@@ -130,6 +131,18 @@ impl Registers {
         }
     }
 
+    fn set(&mut self, target: ArithmeticTarget, value: u8) {
+        match target {
+            ArithmeticTarget::A => self.a = value,
+            ArithmeticTarget::B => self.b = value,
+            ArithmeticTarget::C => self.c = value,
+            ArithmeticTarget::D => self.d = value,
+            ArithmeticTarget::E => self.e = value,
+            ArithmeticTarget::H => self.h = value,
+            ArithmeticTarget::L => self.l = value,
+        }
+    }
+
     fn get_word(&self, target: WordTarget) -> u16 {
         match target {
             WordTarget::BC => self.get_bc(),
@@ -204,6 +217,16 @@ impl CPU {
                 let value = self.registers.get(target);
                 self.cp(value);
             }
+            Instruction::INC(target) => {
+                let value = self.registers.get(target);
+                let result = self.inc(value);
+                self.registers.set(target, result);
+            }
+            Instruction::DEC(target) => {
+                let value = self.registers.get(target);
+                let result = self.dec(value);
+                self.registers.set(target, result);
+            }
         }
     }
     fn add(&mut self, value: u8) -> u8 {
@@ -262,6 +285,10 @@ impl CPU {
         let hl = self.registers.get_hl();
         let result = hl.wrapping_add(value);
 
+        self.registers.f.subtract = false;
+        self.registers.f.half_carry = ((hl & 0x0FFF) + (value & 0x0FFF)) > 0x0FFF;
+        self.registers.f.carry = hl.wrapping_add(value) < hl;
+
         self.registers.set_hl(result);
     }
 
@@ -309,5 +336,25 @@ impl CPU {
         self.registers.f.subtract = true;
         self.registers.f.carry = borrow;
         self.registers.f.half_carry = (a & 0xF) < (value & 0xF);
+    }
+
+    fn inc(&mut self, value: u8) -> u8 {
+        let result = value.wrapping_add(1);
+
+        self.registers.f.zero = result == 0;
+        self.registers.f.subtract = false;
+        self.registers.f.half_carry = (value & 0x0F) == 0x0F;
+
+        result
+    }
+
+    fn dec(&mut self, value: u8) -> u8 {
+        let result = value.wrapping_sub(1);
+
+        self.registers.f.zero = result == 0;
+        self.registers.f.subtract = true;
+        self.registers.f.half_carry = (value & 0x0F) == 0x0F;
+
+        result
     }
 }
