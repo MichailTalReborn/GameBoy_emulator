@@ -13,6 +13,8 @@ pub enum Instruction {
     SUB(ArithmeticTarget),
     ADDHL(WordTarget),
     ADC(ArithmeticTarget),
+    SBC(ArithmeticTarget),
+    AND(ArithmeticTarget),
 }
 
 pub enum ArithmeticTarget {
@@ -177,6 +179,14 @@ impl CPU {
                 let value = self.registers.get(target);
                 self.registers.a = self.addc(value);
             }
+            Instruction::SBC(target) => {
+                let value = self.registers.get(target);
+                self.registers.a = self.subc(value);
+            }
+            Instruction::AND(target) => {
+                let value = self.registers.get(target);
+                self.registers.a = self.and(value);
+            }
         }
     }
 
@@ -216,10 +226,38 @@ impl CPU {
         result
     }
 
+    fn subc(&mut self, value: u8) -> u8 {
+        let a = self.registers.a;
+        let carry = self.registers.f.carry as u8;
+
+        let result = a.wrapping_sub(value).wrapping_sub(carry);
+
+        self.registers.f.zero = result == 0;
+        self.registers.f.subtract = true;
+
+        self.registers.f.carry = (a as u16) < (value as u16 + carry as u16);
+
+        self.registers.f.half_carry = (a & 0xF) < ((value & 0xF) + carry);
+
+        result
+    }
+
     fn add_hl(&mut self, value: u16) {
         let hl = self.registers.get_hl();
         let result = hl.wrapping_add(value);
 
         self.registers.set_hl(result);
+    }
+
+    fn and(&mut self, value: u8) -> u8 {
+        let a = self.registers.a;
+        let result = a & value;
+
+        self.registers.f.zero = result == 0;
+        self.registers.f.subtract = false;
+        self.registers.f.half_carry = true;
+        self.registers.f.carry = false;
+
+        result
     }
 }
