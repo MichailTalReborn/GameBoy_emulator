@@ -1,3 +1,5 @@
+use std::result;
+
 const ZERO_FLAG_BYTE_POSITION: u8 = 7;
 const SUBSTRACT_FLAG_BYTE_POSITION: u8 = 6;
 const HALF_CARRY_FLAG_BYTE_POSITION: u8 = 5;
@@ -15,6 +17,9 @@ pub enum Instruction {
     ADC(ArithmeticTarget),
     SBC(ArithmeticTarget),
     AND(ArithmeticTarget),
+    OR(ArithmeticTarget),
+    XOR(ArithmeticTarget),
+    CP(ArithmeticTarget),
 }
 
 pub enum ArithmeticTarget {
@@ -187,9 +192,20 @@ impl CPU {
                 let value = self.registers.get(target);
                 self.registers.a = self.and(value);
             }
+            Instruction::OR(target) => {
+                let value = self.registers.get(target);
+                self.registers.a = self.or(value);
+            }
+            Instruction::XOR(target) => {
+                let value = self.registers.get(target);
+                self.registers.a = self.xor(value);
+            }
+            Instruction::CP(target) => {
+                let value = self.registers.get(target);
+                self.cp(value);
+            }
         }
     }
-
     fn add(&mut self, value: u8) -> u8 {
         let (new_value, did_overflow) = self.registers.a.overflowing_add(value);
         self.registers.f.zero = new_value == 0;
@@ -259,5 +275,39 @@ impl CPU {
         self.registers.f.carry = false;
 
         result
+    }
+
+    fn or(&mut self, value: u8) -> u8 {
+        let a = self.registers.a;
+        let result = a | value;
+
+        self.registers.f.zero = result == 0;
+        self.registers.f.subtract = false;
+        self.registers.f.half_carry = false;
+        self.registers.f.carry = false;
+
+        result
+    }
+
+    fn xor(&mut self, value: u8) -> u8 {
+        let a = self.registers.a;
+        let result = a ^ value;
+
+        self.registers.f.zero = result == 0;
+        self.registers.f.subtract = false;
+        self.registers.f.half_carry = false;
+        self.registers.f.carry = false;
+
+        result
+    }
+
+    fn cp(&mut self, value: u8) {
+        let a = self.registers.a;
+        let (result, borrow) = a.overflowing_sub(value);
+
+        self.registers.f.zero = result == 0;
+        self.registers.f.subtract = true;
+        self.registers.f.carry = borrow;
+        self.registers.f.half_carry = (a & 0xF) < (value & 0xF);
     }
 }
