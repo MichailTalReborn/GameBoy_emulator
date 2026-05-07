@@ -20,6 +20,10 @@ pub enum Instruction {
     CP(ArithmeticTarget),
     INC(ArithmeticTarget),
     DEC(ArithmeticTarget),
+    CCF(),
+    SCF(),
+    RRA(),
+    RLA(),
 }
 
 #[derive(Clone, Copy)]
@@ -227,6 +231,13 @@ impl CPU {
                 let result = self.dec(value);
                 self.registers.set(target, result);
             }
+            Instruction::CCF() => self.ccf(),
+
+            Instruction::SCF() => self.scf(),
+
+            Instruction::RRA() => self.rra(),
+
+            Instruction::RLA() => self.rla(),
         }
     }
     fn add(&mut self, value: u8) -> u8 {
@@ -356,5 +367,53 @@ impl CPU {
         self.registers.f.half_carry = (value & 0x0F) == 0x0F;
 
         result
+    }
+
+    fn ccf(&mut self) {
+        self.registers.f.subtract = false;
+        self.registers.f.half_carry = false;
+        self.registers.f.carry = !self.registers.f.carry;
+    }
+
+    fn scf(&mut self) {
+        self.registers.f.subtract = false;
+        self.registers.f.half_carry = false;
+        self.registers.f.carry = true;
+    }
+
+    fn rra(&mut self) {
+        let a = self.registers.a;
+        let old_carry = self.registers.f.carry;
+        let new_carry = (a & 0x01) != 0;
+        let mut result = a >> 1;
+
+        if old_carry {
+            result |= 0x80;
+        }
+
+        self.registers.a = result;
+
+        self.registers.f.zero = false;
+        self.registers.f.subtract = false;
+        self.registers.f.half_carry = false;
+        self.registers.f.carry = new_carry;
+    }
+
+    fn rla(&mut self) {
+        let a = self.registers.a;
+        let old_carry = self.registers.f.carry;
+        let new_carry = (a & 0x80) != 0;
+        let mut result = a << 1;
+
+        if old_carry {
+            result |= 0x01;
+        }
+
+        self.registers.a = result;
+
+        self.registers.f.zero = false;
+        self.registers.f.subtract = false;
+        self.registers.f.half_carry = false;
+        self.registers.f.carry = new_carry;
     }
 }
