@@ -24,6 +24,20 @@ pub enum Instruction {
     SCF(),
     RRA(),
     RLA(),
+    RRCA(),
+    RRLA(),
+    CPL(),
+    BIT(u8, ArithmeticTarget),
+    RESET(u8, ArithmeticTarget),
+    SET(u8, ArithmeticTarget),
+    SRL(ArithmeticTarget),
+    RR(ArithmeticTarget),
+    RL(ArithmeticTarget),
+    RRC(ArithmeticTarget),
+    RLC(ArithmeticTarget),
+    SRA(ArithmeticTarget),
+    SLA(ArithmeticTarget),
+    SWAP(ArithmeticTarget),
 }
 
 #[derive(Clone, Copy)]
@@ -238,6 +252,85 @@ impl CPU {
             Instruction::RRA() => self.rra(),
 
             Instruction::RLA() => self.rla(),
+
+            Instruction::RRCA() => self.rrca(),
+
+            Instruction::RRLA() => self.rrla(),
+
+            Instruction::CPL() => self.cpl(),
+
+            Instruction::BIT(bit, target) => {
+                let value = self.registers.get(target);
+                self.bit(bit, value);
+            }
+
+            Instruction::RESET(bit, target) => {
+                let value = self.registers.get(target);
+                let result = self.reset(bit, value);
+                self.registers.set(target, result);
+            }
+
+            Instruction::SET(bit, target) => {
+                let value = self.registers.get(target);
+                let result = self.set(bit, value);
+                self.registers.set(target, result);
+            }
+
+            Instruction::SRL(target) => {
+                let value = self.registers.get(target);
+                let result = self.srl(value);
+
+                self.registers.set(target, result);
+            }
+
+            Instruction::RR(target) => {
+                let value = self.registers.get(target);
+                let result = self.rr(value);
+
+                self.registers.set(target, result);
+            }
+
+            Instruction::RL(target) => {
+                let value = self.registers.get(target);
+                let result = self.rl(value);
+
+                self.registers.set(target, result);
+            }
+
+            Instruction::RRC(target) => {
+                let value = self.registers.get(target);
+                let result = self.rrc(value);
+
+                self.registers.set(target, result);
+            }
+
+            Instruction::RLC(target) => {
+                let value = self.registers.get(target);
+                let result = self.rlc(value);
+
+                self.registers.set(target, result);
+            }
+
+            Instruction::SRA(target) => {
+                let value = self.registers.get(target);
+                let result = self.sra(value);
+
+                self.registers.set(target, result);
+            }
+
+            Instruction::SLA(target) => {
+                let value = self.registers.get(target);
+                let result = self.sla(value);
+
+                self.registers.set(target, result);
+            }
+
+            Instruction::SWAP(target) => {
+                let value = self.registers.get(target);
+                let result = self.swap(value);
+
+                self.registers.set(target, result);
+            }
         }
     }
     fn add(&mut self, value: u8) -> u8 {
@@ -415,5 +508,184 @@ impl CPU {
         self.registers.f.subtract = false;
         self.registers.f.half_carry = false;
         self.registers.f.carry = new_carry;
+    }
+
+    fn rrca(&mut self) {
+        let a = self.registers.a;
+        let carry = (a & 0x01) != 0;
+        let mut result = a >> 1;
+
+        if carry {
+            result |= 0x00;
+        }
+
+        self.registers.a = result;
+
+        self.registers.f.zero = false;
+        self.registers.f.subtract = false;
+        self.registers.f.half_carry = false;
+        self.registers.f.carry = carry;
+    }
+
+    fn rrla(&mut self) {
+        let a = self.registers.a;
+        let carry = (a & 0x80) != 0;
+        let mut result = a << 1;
+
+        if carry {
+            result |= 0x01;
+        }
+
+        self.registers.a = result;
+
+        self.registers.f.zero = false;
+        self.registers.f.subtract = false;
+        self.registers.f.half_carry = false;
+        self.registers.f.carry = carry;
+    }
+
+    fn cpl(&mut self) {
+        self.registers.a = !self.registers.a;
+
+        self.registers.f.subtract = false;
+        self.registers.f.half_carry = false;
+    }
+
+    fn bit(&mut self, bit: u8, value: u8) {
+        let bit_set = (value & (1 << bit)) != 0;
+
+        self.registers.f.zero = !bit_set;
+        self.registers.f.subtract = false;
+        self.registers.f.half_carry = false;
+    }
+
+    fn reset(&mut self, bit: u8, value: u8) -> u8 {
+        value & !(1 << bit)
+    }
+
+    fn set(&mut self, bit: u8, value: u8) -> u8 {
+        value | (1 << bit)
+    }
+
+    fn srl(&mut self, value: u8) -> u8 {
+        let result = value >> 1;
+
+        self.registers.f.zero = result == 0;
+        self.registers.f.subtract = false;
+        self.registers.f.half_carry = false;
+        self.registers.f.carry = (value & 0x01) != 0;
+
+        result
+    }
+
+    fn rr(&mut self, value: u8) -> u8 {
+        let old_carry = self.registers.f.carry;
+        let new_carry = (value & 0x01) != 0;
+
+        let mut result = value >> 1;
+
+        if old_carry {
+            result |= 0x80;
+        }
+
+        self.registers.f.zero = result == 0;
+        self.registers.f.subtract = false;
+        self.registers.f.half_carry = false;
+        self.registers.f.carry = new_carry;
+
+        result
+    }
+
+    fn rl(&mut self, value: u8) -> u8 {
+        let old_carry = self.registers.f.carry;
+        let new_carry = (value & 0x80) != 0;
+
+        let mut result = value << 1;
+
+        if old_carry {
+            result |= 0x01;
+        }
+
+        self.registers.f.zero = result == 0;
+        self.registers.f.subtract = false;
+        self.registers.f.half_carry = false;
+        self.registers.f.carry = new_carry;
+
+        result
+    }
+
+    fn rrc(&mut self, value: u8) -> u8 {
+        let new_carry = (value & 0x01) != 0;
+
+        let mut result = value >> 1;
+
+        if new_carry {
+            result |= 0x80;
+        }
+
+        self.registers.f.zero = result == 0;
+        self.registers.f.subtract = false;
+        self.registers.f.half_carry = false;
+        self.registers.f.carry = new_carry;
+
+        result
+    }
+
+    fn rlc(&mut self, value: u8) -> u8 {
+        let new_carry = (value & 0x80) != 0;
+
+        let mut result = value << 1;
+
+        if new_carry {
+            result |= 0x01;
+        }
+
+        self.registers.f.zero = result == 0;
+        self.registers.f.subtract = false;
+        self.registers.f.half_carry = false;
+        self.registers.f.carry = new_carry;
+
+        result
+    }
+
+    fn sra(&mut self, value: u8) -> u8 {
+        let bit0 = value & 0x01;
+        let bit7 = value & 0x80;
+
+        let result = (value >> 1) | bit7;
+
+        self.registers.f.zero = result == 0;
+        self.registers.f.subtract = false;
+        self.registers.f.half_carry = false;
+        self.registers.f.carry = bit0 != 0;
+
+        result
+    }
+
+    fn sla(&mut self, value: u8) -> u8 {
+        let bit7 = value & 0x80;
+
+        let result = value << 1;
+
+        self.registers.f.zero = result == 0;
+        self.registers.f.subtract = false;
+        self.registers.f.half_carry = false;
+        self.registers.f.carry = bit7 != 0;
+
+        result
+    }
+
+    fn swap(&mut self, value: u8) -> u8 {
+        let upper = value >> 4;
+        let lower = value << 4;
+
+        let result = upper | lower;
+
+        self.registers.f.zero = result == 0;
+        self.registers.f.subtract = false;
+        self.registers.f.half_carry = false;
+        self.registers.f.carry = false;
+
+        result
     }
 }
